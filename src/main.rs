@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
+use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
@@ -8,7 +9,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-use zeno::Transform;
 
 struct App<'win> {
     window: Arc<Window>,
@@ -57,64 +57,23 @@ impl<'win> ApplicationHandler for App<'win> {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested | WindowEvent::Moved(_) | WindowEvent::Focused(_) => {
-                let (mask, _) = // zeno::Mask::new("M 8,56 32,8 56,56 Z")
-                    zeno::Mask::new("M3.32031 11.6835C3.32031 16.6541 7.34975 20.6835 12.3203 20.6835C16.1075 20.6835 19.3483 18.3443 20.6768 15.032C19.6402 15.4486 18.5059 15.6834 17.3203 15.6834C12.3497 15.6834 8.32031 11.654 8.32031 6.68342C8.32031 5.50338 8.55165 4.36259 8.96453 3.32996C5.65605 4.66028 3.32031 7.89912 3.32031 11.6835Z")
-                    .size(WIDTH, HEIGHT)
-                    // .format(zeno::Format::subpixel_bgra())
-                    .transform(Some(Transform::scale(25f32, 25f32)))
-                    .render();
+                let mut pixmap = Pixmap::new(WIDTH, HEIGHT).unwrap();
 
-                // println!(
-                //     "chunk: {:#?}",
-                //     mask.chunks(4).filter(|c| *(c.get(3).unwrap()) != 0).nth(0)
-                // );
+                let mut paint1 = Paint::default();
+                paint1.set_color_rgba8(50, 107, 160, 255);
+                paint1.anti_alias = false;
+                let path1 = PathBuilder::from_circle(200.0, 200.0, 150.0).unwrap();
 
+                pixmap.fill(Color::from_rgba8(255, 200, 255, 255));
+                pixmap.fill_path(
+                    &path1,
+                    &paint1,
+                    FillRule::Winding,
+                    Transform::from_scale(1.3, 1.3),
+                    None,
+                );
                 let frame = self.pixels.frame_mut();
-                println!("frame size {}", frame.len());
-                println!("mask size {}", mask.len());
-                // for (i, v) in mask.iter().enumerate() {
-                //     print!("{: ^3} ", v);
-                //     if i % (64 * 4) == 0 {
-                //         println!();
-                //     }
-                // }
-                for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-                    let rgba = if mask[i] != 0 {
-                        [0x00, 0x00, 0x00, mask[i]]
-                    } else {
-                        [0xff, 0xff, 0xff, 255]
-                    };
-                    // let mut rgba = [
-                    //     mask[i * 4 + 2],      // b
-                    //     mask[i * 4 + 1],      // g
-                    //     mask[i * 4 + 0],      // r
-                    //     10 + mask[i * 4 + 3], // a
-                    // ];
-                    // if mask[i * 4 + 2] == 255 {
-                    //     rgba[0] = 0x0f;
-                    // }
-                    // if mask[i * 4 + 1] == 255 {
-                    //     rgba[1] = 0x2f;
-                    // }
-                    // if mask[i * 4 + 0] == 255 {
-                    //     rgba[2] = 0x9;
-                    // }
-                    // if mask[i * 4 + 2] != 0 {
-                    //     println!("b={}", mask[i * 4 + 2]);
-                    // }
-                    // if mask[i * 4 + 0] == 0
-                    //     && mask[i * 4 + 1] == 0
-                    //     && mask[i * 4 + 2] == 0
-                    //     && mask[i * 4 + 3] == 0
-                    // {
-                    //     pixel.copy_from_slice(&[0x1f, 0xff, 0xff, 255]);
-                    //     pixel.copy_from_slice(&[0xff, 0xff, 0xff, 255]);
-                    // } else {
-                    //     pixel.copy_from_slice(&rgba);
-                    // }
-                    pixel.copy_from_slice(&rgba);
-                }
-
+                frame.copy_from_slice(pixmap.data());
                 let _ = self.pixels.render().unwrap();
             }
             _ => (),

@@ -2,8 +2,6 @@ use std::io::Read;
 
 use prost::Message;
 
-use zeno::Mask;
-
 mod tiles {
     include!(concat!(env!("OUT_DIR"), "/vector_tile.rs"));
 }

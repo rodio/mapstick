@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 prost = "0.13.5"
-zeno = "0.3.2"
+tiny-skia = "0.11.4"
 winit = "0.30.9"
 winit_input_helper = "0.15"
 pixels = "0.15.0"
