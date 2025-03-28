@@ -1,14 +1,18 @@
 [package]
 name = "mapstick"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
+
 
 [dependencies]
 prost = "0.13.5"
-tiny-skia = "0.11.4"
 winit = "0.30.9"
 winit_input_helper = "0.15"
-pixels = "0.15.0"
+vello = "0.4.1"
+pollster = "0.4.0"
+env_logger = "*"
+log = "*"
 
 [build-dependencies]
 prost-build = "0.13.5"
