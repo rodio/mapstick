@@ -6,7 +6,7 @@ use std::{io::Read, num::NonZeroUsize, sync::Arc};
 
 use vello::{
     Renderer, RendererOptions, Scene,
-    kurbo::{Affine, Point, Stroke},
+    kurbo::{Affine, BezPath, Point, Stroke},
     peniko::{self, Color, color::AlphaColor},
     util::{RenderContext, RenderSurface},
 };
@@ -32,6 +32,8 @@ struct App<'app> {
     context: RenderContext,
     renderers: Vec<Option<Renderer>>,
     scene: Scene,
+    fill_paths: Vec<BezPath>,
+    stroke_paths: Vec<BezPath>,
 }
 
 const WIDTH: u32 = 2000;
@@ -39,11 +41,23 @@ const HEIGHT: u32 = 2000;
 
 impl<'app> App<'app> {
     fn new() -> App<'app> {
+        let mut fill_paths = Vec::with_capacity(3);
+        for i in 0..3 {
+            let geometry = get_geometry(0, i);
+            fill_paths.push(create_path(geometry));
+        }
+        let mut stroke_paths = Vec::with_capacity(128);
+        for i in 0..128 {
+            let geometry = get_geometry(8, i);
+            stroke_paths.push(create_path(geometry));
+        }
         Self {
             app_state: AppState::Suspended(None),
             context: RenderContext::new(),
             renderers: vec![],
             scene: Scene::new(),
+            fill_paths,
+            stroke_paths,
         }
     }
 }
@@ -88,9 +102,7 @@ impl<'app> ApplicationHandler for App<'app> {
                 self.scene.reset();
 
                 let shape_col = Color::new([0.0, 0.702, 0.9294, 1.]);
-                for i in 0..3 {
-                    let geometry = get_geometry(0, i);
-                    let path = create_path(geometry);
+                for path in &self.fill_paths {
                     self.scene.fill(
                         peniko::Fill::NonZero,
                         Affine::IDENTITY,
@@ -99,10 +111,9 @@ impl<'app> ApplicationHandler for App<'app> {
                         &path,
                     );
                 }
+
                 let shape_col = Color::new([0.900, 0.802, 0.9294, 1.]);
-                for i in 0..128 {
-                    let geometry = get_geometry(8, i);
-                    let path = create_path(geometry);
+                for path in &self.stroke_paths {
                     self.scene
                         .stroke(&Stroke::new(6.0), Affine::IDENTITY, shape_col, None, &path);
                 }
@@ -136,6 +147,7 @@ impl<'app> ApplicationHandler for App<'app> {
                 // IDK:
                 texture.present();
                 // IDK:
+                // println!("{:?}", device_handle.adapter().features());
                 device_handle.device.poll(vello::wgpu::MaintainBase::Poll);
             }
             _ => (),
