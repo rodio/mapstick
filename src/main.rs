@@ -1,10 +1,14 @@
-use std::{num::NonZeroUsize, sync::Arc};
+mod geometry;
+
+use geometry::{Command, Geometry, Operation};
+use prost::Message;
+use std::{io::Read, num::NonZeroUsize, sync::Arc};
 
 // use env_logger;
 use vello::{
     Renderer, RendererOptions, Scene,
-    kurbo::{Affine, Circle},
-    peniko::{Color, color::AlphaColor},
+    kurbo::{Affine, Point, Stroke},
+    peniko::{self, Color, color::AlphaColor},
     util::{RenderContext, RenderSurface},
 };
 use winit::{
@@ -31,8 +35,8 @@ struct App<'app> {
     scene: Scene,
 }
 
-const WIDTH: u32 = 640;
-const HEIGHT: u32 = 640;
+const WIDTH: u32 = 2000;
+const HEIGHT: u32 = 2000;
 
 impl<'app> App<'app> {
     fn new() -> App<'app> {
@@ -83,15 +87,35 @@ impl<'app> ApplicationHandler for App<'app> {
             WindowEvent::RedrawRequested => {
                 log::trace!("redraw requested");
                 self.scene.reset();
-                let circle = Circle::new((640.0, 640.0), 120.0);
-                let circle_fill_color = Color::new([0.9804, 0.702, 0.5294, 1.]);
-                self.scene.fill(
-                    vello::peniko::Fill::NonZero,
-                    Affine::IDENTITY,
-                    circle_fill_color,
-                    None,
-                    &circle,
-                );
+
+                let shape_col = Color::new([0.0, 0.702, 0.9294, 1.]);
+                for i in 0..3 {
+                    let geometry = get_geometry(0, i);
+                    let path = create_path(geometry);
+                    // self.scene
+                    //     .stroke(&Stroke::new(6.0), Affine::IDENTITY, shape_col, None, &path);
+                    self.scene.fill(
+                        peniko::Fill::NonZero,
+                        Affine::IDENTITY,
+                        shape_col,
+                        None,
+                        &path,
+                    );
+                }
+                let shape_col = Color::new([0.900, 0.802, 0.9294, 1.]);
+                for i in 0..128 {
+                    let geometry = get_geometry(8, i);
+                    let path = create_path(geometry);
+                    self.scene
+                        .stroke(&Stroke::new(6.0), Affine::IDENTITY, shape_col, None, &path);
+                    // self.scene.fill(
+                    //     peniko::Fill::NonZero,
+                    //     Affine::IDENTITY,
+                    //     shape_col,
+                    //     None,
+                    //     &path,
+                    // );
+                }
 
                 let device_handle = &self.context.devices[surface.dev_id];
 
@@ -99,7 +123,7 @@ impl<'app> ApplicationHandler for App<'app> {
                 let height = surface.config.height;
 
                 let params = &vello::RenderParams {
-                    base_color: AlphaColor::BLACK, // Background color
+                    base_color: AlphaColor::from_rgba8(0, 100, 0, 1), // Background color
                     width,
                     height,
                     antialiasing_method: vello::AaConfig::Msaa16,
@@ -119,8 +143,10 @@ impl<'app> ApplicationHandler for App<'app> {
                     )
                     .unwrap();
 
+                // IDK:
                 texture.present();
-                // device_handle.device.poll(vello::wgpu::MaintainBase::Poll);
+                // IDK:
+                device_handle.device.poll(vello::wgpu::MaintainBase::Poll);
             }
             _ => (),
         }
@@ -180,12 +206,74 @@ impl<'app> ApplicationHandler for App<'app> {
     }
 }
 
+fn create_path(geometry: Geometry) -> vello::kurbo::BezPath {
+    let mut path = peniko::kurbo::BezPath::new();
+    let mut px = 0.0;
+    let mut py = 0.0;
+    for operation in geometry.operations {
+        match operation {
+            Operation {
+                command: Command::MoveTo,
+                params,
+            } => {
+                let cx = px + params.get(0).unwrap().raw_value as f64;
+                let cy = py + params.get(1).unwrap().raw_value as f64;
+                path.move_to(Point::new(cx, cy));
+                px = cx;
+                py = cy;
+            }
+            Operation {
+                command: Command::LineTo,
+                params,
+            } => {
+                let cx = px + params.get(0).unwrap().raw_value as f64;
+                let cy = py + params.get(1).unwrap().raw_value as f64;
+                path.line_to(Point::new(cx, cy));
+                px = cx;
+                py = cy;
+            }
+            Operation {
+                command: Command::ClosePath,
+                ..
+            } => {
+                path.close_path();
+            }
+        }
+    }
+
+    path
+}
+
 fn main() {
     env_logger::builder()
         .format_timestamp(Some(env_logger::TimestampPrecision::Millis))
         .filter_level(log::LevelFilter::Info)
         .init();
+
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new();
     let _ = event_loop.run_app(&mut app);
+}
+
+include!(concat!(env!("OUT_DIR"), "/vector_tile.rs"));
+
+pub fn get_geometry(layer: usize, feature: usize) -> Geometry {
+    let mut file = std::fs::File::open("tile1.mvt").unwrap();
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).unwrap();
+    let tile = Tile::decode(buf.as_slice()).unwrap();
+    let geometry_vec = &tile
+        .layers
+        .get(layer)
+        .unwrap()
+        .features
+        .get(feature)
+        .unwrap()
+        .geometry;
+    let geometry: Geometry = Geometry::try_from(geometry_vec).unwrap();
+    // println!("{:#?}", &geometry);
+    // for (i, layer) in tile.layers.into_iter().enumerate() {
+    //     std::fs::write(format!("layer{i}.txt"), format!("{:#?}", layer)).unwrap();
+    // }
+    geometry
 }
