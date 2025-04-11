@@ -4,7 +4,6 @@ use geometry::{Command, Geometry, Operation};
 use prost::Message;
 use std::{io::Read, num::NonZeroUsize, sync::Arc};
 
-// use env_logger;
 use vello::{
     Renderer, RendererOptions, Scene,
     kurbo::{Affine, Point, Stroke},
@@ -92,8 +91,6 @@ impl<'app> ApplicationHandler for App<'app> {
                 for i in 0..3 {
                     let geometry = get_geometry(0, i);
                     let path = create_path(geometry);
-                    // self.scene
-                    //     .stroke(&Stroke::new(6.0), Affine::IDENTITY, shape_col, None, &path);
                     self.scene.fill(
                         peniko::Fill::NonZero,
                         Affine::IDENTITY,
@@ -108,13 +105,6 @@ impl<'app> ApplicationHandler for App<'app> {
                     let path = create_path(geometry);
                     self.scene
                         .stroke(&Stroke::new(6.0), Affine::IDENTITY, shape_col, None, &path);
-                    // self.scene.fill(
-                    //     peniko::Fill::NonZero,
-                    //     Affine::IDENTITY,
-                    //     shape_col,
-                    //     None,
-                    //     &path,
-                    // );
                 }
 
                 let device_handle = &self.context.devices[surface.dev_id];
