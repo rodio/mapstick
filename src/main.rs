@@ -1,13 +1,20 @@
 mod geometry;
+mod layer_wrapper;
+mod path;
 
 use geometry::{Command, Geometry, Operation};
+use layer_wrapper::LayerWrapper;
+use path::{
+    Path,
+    PathType::{Fill, StrokeLine},
+};
 use prost::Message;
 use std::{io::Read, num::NonZeroUsize, sync::Arc};
 
 use vello::{
     Renderer, RendererOptions, Scene,
-    kurbo::{Affine, BezPath, Point, Stroke},
-    peniko::{self, Color, color::AlphaColor},
+    kurbo::{Affine, Point, Stroke},
+    peniko::{self, color::AlphaColor},
     util::{RenderContext, RenderSurface},
 };
 use winit::{
@@ -32,8 +39,7 @@ struct App<'app> {
     context: RenderContext,
     renderers: Vec<Option<Renderer>>,
     scene: Scene,
-    fill_paths: Vec<BezPath>,
-    stroke_paths: Vec<BezPath>,
+    paths: Vec<Path>,
 }
 
 const WIDTH: u32 = 2000;
@@ -41,23 +47,57 @@ const HEIGHT: u32 = 2000;
 
 impl<'app> App<'app> {
     fn new() -> App<'app> {
-        let mut fill_paths = Vec::with_capacity(3);
-        for i in 0..3 {
-            let geometry = get_geometry(0, i);
-            fill_paths.push(create_path(geometry));
+        let mut paths = Vec::new();
+        let layer_wrappers = get_layers();
+        for layer_wrapper in layer_wrappers {
+            for feature in &layer_wrapper.features {
+                match feature.ftype() {
+                    tile::GeomType::Unknown => (),
+                    tile::GeomType::Point => (),
+                    tile::GeomType::Linestring => paths.push(Path::new(
+                        create_path(feature.geometry()),
+                        layer_wrapper.color(),
+                        StrokeLine,
+                    )),
+                    tile::GeomType::Polygon => paths.push(Path::new(
+                        create_path(feature.geometry()),
+                        layer_wrapper.color(),
+                        Fill,
+                    )),
+                }
+            }
         }
-        let mut stroke_paths = Vec::with_capacity(128);
-        for i in 0..128 {
-            let geometry = get_geometry(8, i);
-            stroke_paths.push(create_path(geometry));
-        }
+
         Self {
             app_state: AppState::Suspended(None),
             context: RenderContext::new(),
             renderers: vec![],
             scene: Scene::new(),
-            fill_paths,
-            stroke_paths,
+            paths,
+        }
+    }
+
+    fn draw(scene: &mut Scene, paths: &Vec<Path>) {
+        scene.reset();
+        for path in paths {
+            match path.path_type() {
+                StrokeLine => scene.stroke(
+                    &Stroke::new(6.0),
+                    Affine::IDENTITY,
+                    path.color(),
+                    None,
+                    path.bez_path(),
+                ),
+                Fill => {
+                    scene.fill(
+                        peniko::Fill::NonZero,
+                        Affine::IDENTITY,
+                        path.color(),
+                        None,
+                        path.bez_path(),
+                    );
+                }
+            }
         }
     }
 }
@@ -99,49 +139,28 @@ impl<'app> ApplicationHandler for App<'app> {
             }
             WindowEvent::RedrawRequested => {
                 log::trace!("redraw requested");
-                self.scene.reset();
 
-                let shape_col = Color::new([0.0, 0.702, 0.9294, 1.]);
-                for path in &self.fill_paths {
-                    self.scene.fill(
-                        peniko::Fill::NonZero,
-                        Affine::IDENTITY,
-                        shape_col,
-                        None,
-                        &path,
-                    );
-                }
+                App::draw(&mut self.scene, &self.paths);
 
-                let shape_col = Color::new([0.900, 0.802, 0.9294, 1.]);
-                for path in &self.stroke_paths {
-                    self.scene
-                        .stroke(&Stroke::new(6.0), Affine::IDENTITY, shape_col, None, &path);
-                }
-
-                let device_handle = &self.context.devices[surface.dev_id];
-
+                let dev_id = surface.dev_id;
+                let device_handle = &self.context.devices[dev_id];
+                let device = &device_handle.device;
+                let queue = &device_handle.queue;
                 let width = surface.config.width;
                 let height = surface.config.height;
+                let texture = surface.surface.get_current_texture().unwrap();
 
                 let params = &vello::RenderParams {
-                    base_color: AlphaColor::from_rgba8(0, 100, 0, 1), // Background color
+                    base_color: AlphaColor::from_rgba8(100, 120, 90, 1), // Background color
                     width,
                     height,
                     antialiasing_method: vello::AaConfig::Msaa16,
                 };
 
-                let texture = surface.surface.get_current_texture().unwrap();
-
-                self.renderers[surface.dev_id]
+                self.renderers[dev_id]
                     .as_mut()
                     .unwrap()
-                    .render_to_surface(
-                        &device_handle.device,
-                        &device_handle.queue,
-                        &self.scene,
-                        &texture,
-                        params,
-                    )
+                    .render_to_surface(device, queue, &self.scene, &texture, params)
                     .unwrap();
 
                 // IDK:
@@ -200,7 +219,7 @@ impl<'app> ApplicationHandler for App<'app> {
         self.app_state = AppState::Active { surface, window }
     }
 
-    fn suspended(&mut self, event_loop: &event_loop::ActiveEventLoop) {
+    fn suspended(&mut self, _event_loop: &event_loop::ActiveEventLoop) {
         log::info!("suspended");
         if let AppState::Active { window, .. } = &self.app_state {
             self.app_state = AppState::Suspended(Some(Arc::clone(window)));
@@ -208,11 +227,11 @@ impl<'app> ApplicationHandler for App<'app> {
     }
 }
 
-fn create_path(geometry: Geometry) -> vello::kurbo::BezPath {
+fn create_path(geometry: &Geometry) -> vello::kurbo::BezPath {
     let mut path = peniko::kurbo::BezPath::new();
     let mut px = 0.0;
     let mut py = 0.0;
-    for operation in geometry.operations {
+    for operation in geometry.operations.iter() {
         match operation {
             Operation {
                 command: Command::MoveTo,
@@ -259,23 +278,25 @@ fn main() {
 
 include!(concat!(env!("OUT_DIR"), "/vector_tile.rs"));
 
-pub fn get_geometry(layer: usize, feature: usize) -> Geometry {
+pub fn get_layers() -> Vec<LayerWrapper> {
     let mut file = std::fs::File::open("tile1.mvt").unwrap();
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     let tile = Tile::decode(buf.as_slice()).unwrap();
-    let geometry_vec = &tile
-        .layers
-        .get(layer)
-        .unwrap()
-        .features
-        .get(feature)
-        .unwrap()
-        .geometry;
-    let geometry: Geometry = Geometry::try_from(geometry_vec).unwrap();
-    // println!("{:#?}", &geometry);
+
+    let mut res = vec![];
+    for layer in tile.layers {
+        res.push(LayerWrapper::new(layer));
+    }
+
+    res
+    //     .get(feature)
+    //     .unwrap()
+    //     .geometry;
+    // let geometry: Geometry = Geometry::try_from(geometry_vec).unwrap();
+    // // println!("{:#?}", &geometry);
     // for (i, layer) in tile.layers.into_iter().enumerate() {
     //     std::fs::write(format!("layer{i}.txt"), format!("{:#?}", layer)).unwrap();
     // }
-    geometry
+    // geometry
 }
