@@ -8,7 +8,7 @@ rust-version = "1.85"
 [dependencies]
 prost = "0.13.5"
 winit = "0.30.9"
-winit_input_helper = "0.15"
+winit_input_helper = "0.16"
 vello = "0.4.1"
 pollster = "0.4.0"
 env_logger = "*"
