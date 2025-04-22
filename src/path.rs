@@ -1,4 +1,8 @@
-use vello::{kurbo::BezPath, peniko::Color};
+use vello::{
+    Scene,
+    kurbo::{Affine, BezPath, Stroke},
+    peniko::{self, Color},
+};
 
 pub struct Path {
     bez_path: BezPath,
@@ -15,14 +19,23 @@ impl Path {
         }
     }
 
-    pub fn bez_path(&self) -> &BezPath {
-        &self.bez_path
-    }
-    pub fn color(&self) -> &Color {
-        &self.color
-    }
-    pub fn path_type(&self) -> &PathType {
-        &self.path_type
+    pub fn draw(&self, scene: &mut Scene) {
+        match self.path_type {
+            PathType::StrokeLine => scene.stroke(
+                &Stroke::new(6.0),
+                Affine::IDENTITY,
+                self.color,
+                None,
+                &self.bez_path,
+            ),
+            PathType::Fill => scene.fill(
+                peniko::Fill::NonZero,
+                Affine::IDENTITY,
+                self.color,
+                None,
+                &self.bez_path,
+            ),
+        }
     }
 }
 

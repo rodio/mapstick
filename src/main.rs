@@ -13,7 +13,7 @@ use std::{io::Read, num::NonZeroUsize, sync::Arc};
 
 use vello::{
     Renderer, RendererOptions, Scene,
-    kurbo::{Affine, Point, Stroke},
+    kurbo::Point,
     peniko::{self, color::AlphaColor},
     util::{RenderContext, RenderSurface},
 };
@@ -76,30 +76,6 @@ impl<'app> App<'app> {
             paths,
         }
     }
-
-    fn draw(scene: &mut Scene, paths: &Vec<Path>) {
-        scene.reset();
-        for path in paths {
-            match path.path_type() {
-                StrokeLine => scene.stroke(
-                    &Stroke::new(6.0),
-                    Affine::IDENTITY,
-                    path.color(),
-                    None,
-                    path.bez_path(),
-                ),
-                Fill => {
-                    scene.fill(
-                        peniko::Fill::NonZero,
-                        Affine::IDENTITY,
-                        path.color(),
-                        None,
-                        path.bez_path(),
-                    );
-                }
-            }
-        }
-    }
 }
 
 impl<'app> ApplicationHandler for App<'app> {
@@ -140,7 +116,10 @@ impl<'app> ApplicationHandler for App<'app> {
             WindowEvent::RedrawRequested => {
                 log::trace!("redraw requested");
 
-                App::draw(&mut self.scene, &self.paths);
+                self.scene.reset();
+                for path in &self.paths {
+                    path.draw(&mut self.scene);
+                }
 
                 let dev_id = surface.dev_id;
                 let device_handle = &self.context.devices[dev_id];

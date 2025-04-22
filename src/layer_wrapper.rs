@@ -24,7 +24,7 @@ impl LayerWrapper {
         match self.layer.name.as_str() {
             "water" | "waterway" => Color::new([0.0, 0.702, 0.9294, 1.]),
             "landuse" => Color::new([0.1, 0.4, 0.3, 1.]),
-            "landcover" => Color::new([0.1, 0.3, 0.3, 1.]),
+            "landcover" => Color::new([0.1, 0.3, 0.3, 0.5]),
             "transportation_name" => Color::new([0.9, 0.9, 0.9, 1.]),
             &_ => Color::new([0.6, 0.6, 0.6, 1.]),
         }
