@@ -1,3 +1,5 @@
+use core::panic;
+
 use vello::peniko::Color;
 
 use crate::{
@@ -5,8 +7,26 @@ use crate::{
     tile::{Feature, GeomType, Layer},
 };
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum LayerType {
+    Building,
+    Boundary,
+    Waterway,
+    WaterName,
+    Water,
+    Transportation,
+    TransportationName,
+    Place,
+    Housenumber,
+    Poi,
+    Landcover,
+    Landuse,
+}
+
 pub struct LayerWrapper {
     layer: Layer,
+    layer_type: LayerType,
+
     pub features: Vec<FeatureWrapper>,
 }
 
@@ -17,17 +37,44 @@ impl LayerWrapper {
             .iter()
             .map(|f| FeatureWrapper::new(f.clone()))
             .collect();
-        Self { layer, features }
+
+        let layer_type = match layer.name.as_str() {
+            "waterway" => LayerType::Waterway,
+            "water" => LayerType::Water,
+            "water_name" => LayerType::WaterName,
+            "building" => LayerType::Building,
+            "landuse" => LayerType::Landuse,
+            "boundary" => LayerType::Boundary,
+            "transportation" => LayerType::Transportation,
+            "transportation_name" => LayerType::TransportationName,
+            "place" => LayerType::Place,
+            "housenumber" => LayerType::Housenumber,
+            "poi" => LayerType::Poi,
+            "landcover" => LayerType::Landcover,
+            &_ => panic!("{}", layer.name),
+        };
+        Self {
+            layer,
+            layer_type,
+            features,
+        }
     }
 
     pub fn color(&self) -> Color {
-        match self.layer.name.as_str() {
-            "water" | "waterway" => Color::new([0.0, 0.702, 0.9294, 1.]),
-            "landuse" => Color::new([0.1, 0.4, 0.3, 1.]),
-            "landcover" => Color::new([0.1, 0.3, 0.3, 0.5]),
-            "transportation_name" => Color::new([0.9, 0.9, 0.9, 1.]),
-            &_ => Color::new([0.6, 0.6, 0.6, 1.]),
+        let alpha = 1.0;
+        match self.layer_type {
+            LayerType::Waterway => Color::new([0.0, 0.902, 0.9294, alpha]),
+            LayerType::WaterName => Color::new([0.0, 0.302, 0.3294, alpha]),
+            LayerType::Water => Color::new([0.0, 0.702, 0.9294, alpha]),
+            LayerType::Landcover => Color::new([0.1, 0.3, 0.3, alpha]),
+            LayerType::Landuse => Color::new([0.1, 0.4, 0.3, alpha]),
+            LayerType::Boundary => Color::new([0.1, 0.9, 0.1, alpha]),
+            _ => Color::new([0.6, 0.6, 0.6, alpha]),
         }
+    }
+
+    pub fn layer_type(&self) -> LayerType {
+        self.layer_type.clone()
     }
 }
 

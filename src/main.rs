@@ -9,7 +9,7 @@ use path::{
     PathType::{Fill, StrokeLine},
 };
 use prost::Message;
-use std::{io::Read, num::NonZeroUsize, sync::Arc};
+use std::{collections::BinaryHeap, io::Read, num::NonZeroUsize, sync::Arc};
 
 use vello::{
     Renderer, RendererOptions, Scene,
@@ -39,7 +39,7 @@ struct App<'app> {
     context: RenderContext,
     renderers: Vec<Option<Renderer>>,
     scene: Scene,
-    paths: Vec<Path>,
+    paths: BinaryHeap<Path>,
 }
 
 const WIDTH: u32 = 2000;
@@ -47,7 +47,7 @@ const HEIGHT: u32 = 2000;
 
 impl<'app> App<'app> {
     fn new() -> App<'app> {
-        let mut paths = Vec::new();
+        let mut paths = BinaryHeap::new();
         let layer_wrappers = get_layers();
         for layer_wrapper in layer_wrappers {
             for feature in &layer_wrapper.features {
@@ -58,11 +58,13 @@ impl<'app> App<'app> {
                         create_path(feature.geometry()),
                         layer_wrapper.color(),
                         StrokeLine,
+                        layer_wrapper.layer_type(),
                     )),
                     tile::GeomType::Polygon => paths.push(Path::new(
                         create_path(feature.geometry()),
                         layer_wrapper.color(),
                         Fill,
+                        layer_wrapper.layer_type(),
                     )),
                 }
             }
@@ -117,7 +119,10 @@ impl<'app> ApplicationHandler for App<'app> {
                 log::trace!("redraw requested");
 
                 self.scene.reset();
-                for path in &self.paths {
+                loop {
+                    let Some(path) = self.paths.pop() else {
+                        break;
+                    };
                     path.draw(&mut self.scene);
                 }
 
@@ -263,19 +268,13 @@ pub fn get_layers() -> Vec<LayerWrapper> {
     file.read_to_end(&mut buf).unwrap();
     let tile = Tile::decode(buf.as_slice()).unwrap();
 
-    let mut res = vec![];
+    let mut res = Vec::new();
+    // for (i, layer) in tile.layers.iter().enumerate() {
+    //     std::fs::write(format!("layer{i}.txt"), format!("{:#?}", layer)).unwrap();
+    // }
     for layer in tile.layers {
         res.push(LayerWrapper::new(layer));
     }
 
     res
-    //     .get(feature)
-    //     .unwrap()
-    //     .geometry;
-    // let geometry: Geometry = Geometry::try_from(geometry_vec).unwrap();
-    // // println!("{:#?}", &geometry);
-    // for (i, layer) in tile.layers.into_iter().enumerate() {
-    //     std::fs::write(format!("layer{i}.txt"), format!("{:#?}", layer)).unwrap();
-    // }
-    // geometry
 }
