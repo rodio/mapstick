@@ -9,11 +9,11 @@ use path::{
     PathType::{Fill, StrokeLine},
 };
 use prost::Message;
-use std::{collections::BinaryHeap, io::Read, num::NonZeroUsize, sync::Arc};
+use std::{cell::RefCell, collections::BinaryHeap, io::Read, num::NonZeroUsize, sync::Arc};
 
 use vello::{
     Renderer, RendererOptions, Scene,
-    kurbo::Point,
+    kurbo::{Affine, Point, Vec2},
     peniko::{self, color::AlphaColor},
     util::{RenderContext, RenderSurface},
 };
@@ -39,43 +39,24 @@ struct App<'app> {
     context: RenderContext,
     renderers: Vec<Option<Renderer>>,
     scene: Scene,
-    paths: BinaryHeap<Path>,
+    paths: BinaryHeap<RefCell<Path>>,
+    pos_x: f64,
+    pos_y: f64,
 }
 
 const WIDTH: u32 = 2000;
 const HEIGHT: u32 = 2000;
 
 impl<'app> App<'app> {
-    fn new() -> App<'app> {
-        let mut paths = BinaryHeap::new();
-        let layer_wrappers = get_layers();
-        for layer_wrapper in layer_wrappers {
-            for feature in &layer_wrapper.features {
-                match feature.ftype() {
-                    tile::GeomType::Unknown => (),
-                    tile::GeomType::Point => (),
-                    tile::GeomType::Linestring => paths.push(Path::new(
-                        create_path(feature.geometry()),
-                        layer_wrapper.color(),
-                        StrokeLine,
-                        layer_wrapper.layer_type(),
-                    )),
-                    tile::GeomType::Polygon => paths.push(Path::new(
-                        create_path(feature.geometry()),
-                        layer_wrapper.color(),
-                        Fill,
-                        layer_wrapper.layer_type(),
-                    )),
-                }
-            }
-        }
-
+    fn new(paths: BinaryHeap<RefCell<Path>>) -> App<'app> {
         Self {
             app_state: AppState::Suspended(None),
             context: RenderContext::new(),
             renderers: vec![],
             scene: Scene::new(),
             paths,
+            pos_x: 0.0,
+            pos_y: 0.0,
         }
     }
 }
@@ -93,7 +74,6 @@ impl<'app> ApplicationHandler for App<'app> {
         if window.id() != window_id {
             return;
         }
-
         match event {
             WindowEvent::CloseRequested => {
                 log::info!("close requested");
@@ -103,11 +83,66 @@ impl<'app> ApplicationHandler for App<'app> {
                 self.context
                     .resize_surface(surface, size.width, size.height);
             }
+            WindowEvent::CursorMoved {
+                position,
+                device_id: _,
+            } => {
+                if self.pos_x == 0.0 {
+                    self.pos_x = position.x;
+                }
+                if self.pos_y == 0.0 {
+                    self.pos_y = position.y;
+                }
+                for path in self.paths.iter() {
+                    path.borrow_mut()
+                        .bez_path
+                        .apply_affine(Affine::translate(Vec2::new(
+                            self.pos_x - position.x,
+                            self.pos_y - position.y,
+                        )));
+                }
+                self.pos_x = position.x;
+                self.pos_y = position.y;
+                window.request_redraw();
+            }
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state.is_pressed() {
+                    let move_step = 50.0;
                     if event.logical_key == NamedKey::Escape {
                         log::info!("exiting on ESC");
                         event_loop.exit();
+                    };
+                    if event.logical_key == NamedKey::ArrowDown {
+                        for path in self.paths.iter() {
+                            path.borrow_mut()
+                                .bez_path
+                                .apply_affine(Affine::translate(Vec2::new(0.0, -move_step)));
+                        }
+                        window.request_redraw();
+                    }
+                    if event.logical_key == NamedKey::ArrowRight {
+                        for path in self.paths.iter() {
+                            path.borrow_mut()
+                                .bez_path
+                                .apply_affine(Affine::translate(Vec2::new(-move_step, 0.0)));
+                        }
+                        window.request_redraw();
+                    }
+                    if event.logical_key == NamedKey::ArrowUp {
+                        for path in self.paths.iter() {
+                            path.borrow_mut()
+                                .bez_path
+                                .apply_affine(Affine::translate(Vec2::new(0.0, move_step)));
+                        }
+                        window.request_redraw();
+                    }
+                    if event.logical_key == NamedKey::ArrowLeft {
+                        for path in self.paths.iter() {
+                            path.borrow_mut()
+                                .bez_path
+                                .apply_affine(Affine::translate(Vec2::new(move_step, 0.0)));
+                        }
+                        window.request_redraw();
                     }
                 }
             }
@@ -119,12 +154,15 @@ impl<'app> ApplicationHandler for App<'app> {
                 log::trace!("redraw requested");
 
                 self.scene.reset();
+                let mut paths2 = BinaryHeap::new();
                 loop {
                     let Some(path) = self.paths.pop() else {
                         break;
                     };
-                    path.draw(&mut self.scene);
+                    path.borrow().draw(&mut self.scene);
+                    paths2.push(path);
                 }
+                self.paths.append(&mut paths2);
 
                 let dev_id = surface.dev_id;
                 let device_handle = &self.context.devices[dev_id];
@@ -255,8 +293,31 @@ fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
+    let mut paths = BinaryHeap::new();
+    let layer_wrappers = get_layers();
+    for layer_wrapper in layer_wrappers {
+        for feature in &layer_wrapper.features {
+            match feature.ftype() {
+                tile::GeomType::Unknown => (),
+                tile::GeomType::Point => (),
+                tile::GeomType::Linestring => paths.push(RefCell::new(Path::new(
+                    create_path(feature.geometry()),
+                    layer_wrapper.color(),
+                    StrokeLine,
+                    layer_wrapper.layer_type(),
+                ))),
+                tile::GeomType::Polygon => paths.push(RefCell::new(Path::new(
+                    create_path(feature.geometry()),
+                    layer_wrapper.color(),
+                    Fill,
+                    layer_wrapper.layer_type(),
+                ))),
+            }
+        }
+    }
+
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App::new();
+    let mut app = App::new(paths);
     let _ = event_loop.run_app(&mut app);
 }
 

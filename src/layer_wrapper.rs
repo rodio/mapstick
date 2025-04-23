@@ -24,7 +24,6 @@ pub enum LayerType {
 }
 
 pub struct LayerWrapper {
-    layer: Layer,
     layer_type: LayerType,
 
     pub features: Vec<FeatureWrapper>,
@@ -54,7 +53,6 @@ impl LayerWrapper {
             &_ => panic!("{}", layer.name),
         };
         Self {
-            layer,
             layer_type,
             features,
         }
