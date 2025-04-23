@@ -7,7 +7,7 @@ use vello::{
 use crate::layer_wrapper::LayerType;
 
 pub struct Path {
-    bez_path: BezPath,
+    pub bez_path: BezPath,
     color: Color,
     path_type: PathType,
     layer_type: LayerType,
