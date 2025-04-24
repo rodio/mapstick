@@ -59,14 +59,16 @@ impl LayerWrapper {
     }
 
     pub fn color(&self) -> Color {
-        let alpha = 1.0;
+        let alpha = 0.8;
         match self.layer_type {
             LayerType::Waterway => Color::new([0.0, 0.902, 0.9294, alpha]),
             LayerType::WaterName => Color::new([0.0, 0.302, 0.3294, alpha]),
-            LayerType::Water => Color::new([0.0, 0.702, 0.9294, alpha]),
-            LayerType::Landcover => Color::new([0.1, 0.3, 0.3, alpha]),
-            LayerType::Landuse => Color::new([0.1, 0.4, 0.3, alpha]),
+            LayerType::Water => Color::new([0.0, 0.7, 0.9, alpha]),
+            LayerType::Landcover => Color::new([0.6, 0.9, 0.4, alpha]),
+            LayerType::Landuse => Color::new([0.95, 0.95, 0.95, alpha]),
+            LayerType::Building => Color::new([0.5, 0.5, 0.5, alpha]),
             LayerType::Boundary => Color::new([0.1, 0.9, 0.1, alpha]),
+            LayerType::Place => Color::new([0.9, 0.1, 0.1, alpha]),
             _ => Color::new([0.6, 0.6, 0.6, alpha]),
         }
     }

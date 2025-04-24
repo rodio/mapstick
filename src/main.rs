@@ -20,7 +20,7 @@ use vello::{
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
-    event::WindowEvent,
+    event::{TouchPhase, WindowEvent},
     event_loop::{self, EventLoop},
     keyboard::NamedKey,
     window::{Window, WindowAttributes},
@@ -42,6 +42,7 @@ struct App<'app> {
     paths: BinaryHeap<RefCell<Path>>,
     pos_x: f64,
     pos_y: f64,
+    mouse_pressed: bool,
 }
 
 const WIDTH: u32 = 2000;
@@ -57,6 +58,7 @@ impl<'app> App<'app> {
             paths,
             pos_x: 0.0,
             pos_y: 0.0,
+            mouse_pressed: false,
         }
     }
 }
@@ -83,27 +85,57 @@ impl<'app> ApplicationHandler for App<'app> {
                 self.context
                     .resize_surface(surface, size.width, size.height);
             }
+            WindowEvent::MouseInput {
+                device_id: _,
+                state,
+                button: _,
+            } => {
+                if state.is_pressed() {
+                    self.mouse_pressed = true;
+                } else {
+                    self.mouse_pressed = false;
+                }
+            }
             WindowEvent::CursorMoved {
                 position,
                 device_id: _,
             } => {
-                if self.pos_x == 0.0 {
+                if self.mouse_pressed {
+                    if self.pos_x == 0.0 {
+                        self.pos_x = position.x;
+                    }
+                    if self.pos_y == 0.0 {
+                        self.pos_y = position.y;
+                    }
+                    for path in self.paths.iter() {
+                        path.borrow_mut()
+                            .bez_path
+                            .apply_affine(Affine::translate(Vec2::new(
+                                position.x - self.pos_x,
+                                position.y - self.pos_y,
+                            )));
+                    }
                     self.pos_x = position.x;
-                }
-                if self.pos_y == 0.0 {
                     self.pos_y = position.y;
+                    window.request_redraw();
+                } else {
+                    self.pos_x = 0.0;
+                    self.pos_y = 0.0;
                 }
-                for path in self.paths.iter() {
-                    path.borrow_mut()
-                        .bez_path
-                        .apply_affine(Affine::translate(Vec2::new(
-                            self.pos_x - position.x,
-                            self.pos_y - position.y,
-                        )));
+            }
+            WindowEvent::PinchGesture {
+                device_id: _,
+                delta,
+                phase,
+            } => {
+                if phase == TouchPhase::Moved {
+                    for path in self.paths.iter() {
+                        path.borrow_mut()
+                            .bez_path
+                            .apply_affine(Affine::scale(1.0 + delta));
+                    }
+                    window.request_redraw();
                 }
-                self.pos_x = position.x;
-                self.pos_y = position.y;
-                window.request_redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.state.is_pressed() {

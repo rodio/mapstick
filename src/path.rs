@@ -66,10 +66,6 @@ impl Path {
             ),
         }
     }
-
-    pub fn layer_type(&self) -> &LayerType {
-        &self.layer_type
-    }
 }
 
 pub enum PathType {
