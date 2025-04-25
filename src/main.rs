@@ -40,8 +40,10 @@ struct App<'app> {
     renderers: Vec<Option<Renderer>>,
     scene: Scene,
     paths: BinaryHeap<RefCell<Path>>,
-    pos_x: f64,
-    pos_y: f64,
+    drag_pos_x: f64,
+    drag_pos_y: f64,
+    mouse_pos_x: f64,
+    mouse_pos_y: f64,
     mouse_pressed: bool,
 }
 
@@ -56,8 +58,10 @@ impl<'app> App<'app> {
             renderers: vec![],
             scene: Scene::new(),
             paths,
-            pos_x: 0.0,
-            pos_y: 0.0,
+            drag_pos_x: 0.0,
+            drag_pos_y: 0.0,
+            mouse_pos_x: 0.0,
+            mouse_pos_y: 0.0,
             mouse_pressed: false,
         }
     }
@@ -101,26 +105,28 @@ impl<'app> ApplicationHandler for App<'app> {
                 device_id: _,
             } => {
                 if self.mouse_pressed {
-                    if self.pos_x == 0.0 {
-                        self.pos_x = position.x;
+                    if self.drag_pos_x == 0.0 {
+                        self.drag_pos_x = position.x;
                     }
-                    if self.pos_y == 0.0 {
-                        self.pos_y = position.y;
+                    if self.drag_pos_y == 0.0 {
+                        self.drag_pos_y = position.y;
                     }
                     for path in self.paths.iter() {
                         path.borrow_mut()
                             .bez_path
                             .apply_affine(Affine::translate(Vec2::new(
-                                position.x - self.pos_x,
-                                position.y - self.pos_y,
+                                position.x - self.drag_pos_x,
+                                position.y - self.drag_pos_y,
                             )));
                     }
-                    self.pos_x = position.x;
-                    self.pos_y = position.y;
+                    self.drag_pos_x = position.x;
+                    self.drag_pos_y = position.y;
                     window.request_redraw();
                 } else {
-                    self.pos_x = 0.0;
-                    self.pos_y = 0.0;
+                    self.drag_pos_x = 0.0;
+                    self.drag_pos_y = 0.0;
+                    self.mouse_pos_x = position.x;
+                    self.mouse_pos_y = position.y;
                 }
             }
             WindowEvent::PinchGesture {
@@ -133,6 +139,12 @@ impl<'app> ApplicationHandler for App<'app> {
                         path.borrow_mut()
                             .bez_path
                             .apply_affine(Affine::scale(1.0 + delta));
+                        path.borrow_mut()
+                            .bez_path
+                            .apply_affine(Affine::translate(Vec2::new(
+                                -1.0 * (self.mouse_pos_x * delta),
+                                -1.0 * (self.mouse_pos_y * delta),
+                            )));
                     }
                     window.request_redraw();
                 }
