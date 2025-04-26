@@ -8,7 +8,7 @@ As of now, I am using [`winit`](https://crates.io/crates/winit) for window manag
 
 I am able to draw some features and layers of a single tile now:
 
-![Current Screenshot](./current-screenshot.jpg "Current Mapstick Screenshot")
+![Current Screenshot](./mapstic-current.gif "Current Mapstick Screenshot")
 
 ## Data
 
